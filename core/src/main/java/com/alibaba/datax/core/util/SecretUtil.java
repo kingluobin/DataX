@@ -8,15 +8,14 @@ import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang3.tuple.ImmutableTriple;
 import org.apache.commons.lang3.tuple.Triple;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.security.Key;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -33,6 +32,8 @@ import java.util.Properties;
  * Created by jingxing on 14/12/15.
  */
 public class SecretUtil {
+    //private static final Logger LOG = LoggerFactory.getLogger(ConfigParser.class);
+
     private static Properties properties;
 
     //RSA Key：keyVersion   value:left:privateKey, right:publicKey, middle: type
@@ -42,6 +43,8 @@ public class SecretUtil {
     private static final String ENCODING = "UTF-8";
 
     public static final String KEY_ALGORITHM_RSA = "RSA";
+
+    public static final String KEY_ALGORITHM_BASE64 = "BASE64";
     
     public static final String KEY_ALGORITHM_3DES = "DESede";
     
@@ -98,6 +101,13 @@ public class SecretUtil {
             return SecretUtil.decryptRSA(data, key);
         } else if (SecretUtil.KEY_ALGORITHM_3DES.equals(method)) {
             return SecretUtil.decrypt3DES(data, key);
+        } else if (SecretUtil.KEY_ALGORITHM_BASE64.equals(method)) {
+            try {
+                return new String(SecretUtil.decryptBASE64(data),ENCODING);
+            } catch (UnsupportedEncodingException e) {
+                throw DataXException.asDataXException(
+                        FrameworkErrorCode.SECRET_ERROR, "解密出错", e);
+            }
         } else {
             throw DataXException.asDataXException(
                     FrameworkErrorCode.SECRET_ERROR,
@@ -334,6 +344,7 @@ public class SecretUtil {
     public static Configuration decryptSecretKey(Configuration config) {
         String keyVersion = config
                 .getString(CoreConstant.DATAX_JOB_SETTING_KEYVERSION);
+        //LOG.info(String.format(" key version [%s]", keyVersion));
         // 没有设置keyVersion，表示不用解密
         if (StringUtils.isBlank(keyVersion)) {
             return config;
@@ -358,9 +369,11 @@ public class SecretUtil {
         for (String key : config.getKeys()) {
             int lastPathIndex = key.lastIndexOf(".") + 1;
             String lastPathKey = key.substring(lastPathIndex);
+           // LOG.info(String.format("遍历key[%s]lastPathkey[%s]num[%d]", key,lastPathKey,lastPathIndex));
             if (lastPathKey.length() > 1 && lastPathKey.charAt(0) == '*'
                     && lastPathKey.charAt(1) != '*') {
                 Object value = config.get(key);
+             //   LOG.info(String.format("遍历key带*[%s]value[%s]", key,value));
                 if (value instanceof String) {
                     String newKey = key.substring(0, lastPathIndex)
                             + lastPathKey.substring(1);
@@ -368,6 +381,7 @@ public class SecretUtil {
                             SecretUtil.decrypt((String) value, decryptKey, method));
                     config.addSecretKeyPath(newKey);
                     config.remove(key);
+                //    LOG.info(String.format("new key [%s]", newKey));
                 }
             }
         }
@@ -394,7 +408,13 @@ public class SecretUtil {
                     String servicePassword = properties
                             .getProperty(servicePasswords[i]);
                     if (StringUtils.isNotBlank(servicePassword)) {
-                        versionKeyMap.put(serviceUsername, ImmutableTriple.of(
+                        if("NDES".equals(serviceUsername))
+                        {
+                            versionKeyMap.put(serviceUsername, ImmutableTriple.of(
+                                    servicePassword, SecretUtil.KEY_ALGORITHM_BASE64,
+                                    servicePassword));
+                        }else
+                            versionKeyMap.put(serviceUsername, ImmutableTriple.of(
                                 servicePassword, SecretUtil.KEY_ALGORITHM_3DES,
                                 servicePassword));
                     } else {
@@ -436,5 +456,9 @@ public class SecretUtil {
                     FrameworkErrorCode.SECRET_ERROR, "DataX配置要求加解密，但无法找到加解密配置");
         }
         return versionKeyMap;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(SecretUtil.encrypt(args[0], "123456", "DESede"));
     }
 }

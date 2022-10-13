@@ -1,0 +1,48 @@
+{
+  "job": {
+    "setting": {
+      "speed": {
+        "channel":10
+      },
+      "keyVersion":"NDES"
+    },
+    "content": [
+      {
+        "reader": {
+          "name": "mysqlreader",
+          "parameter": {
+            "username": "root",
+            "*password": "MTIzNDU2",
+            "column": [
+              "id",
+              "name"
+            ],
+            "splitPk": "id",
+            "connection": [
+              {
+                "table":["product"],
+                "jdbcUrl": [
+                  "jdbc:mysql://192.168.19.2:3306/book-product?useSSL=false"
+                ],
+                "*where":"d2hlcmUgMT0x"
+              }
+            ]
+          }
+        },
+        "writer": {
+          "name": "txtfilewriter",
+          "parameter": {
+            "path": "/Users/luobin/Downloads",
+            "fileName": "${where}",
+            "writeMode": "truncate",
+            "compress":"gzip",
+            "encoding":"UTF-8",
+            "fieldDelimiter":",",
+            "dateFormat": "yyyy-MM-dd",
+            "jxmoban":"Y"
+          }
+        }
+      }
+    ]
+  }
+}

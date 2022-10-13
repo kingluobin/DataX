@@ -8,6 +8,12 @@ import com.alibaba.datax.common.spi.ErrorCode;
  * <p>请不要格式化本类代码</p>
  */
 public enum FrameworkErrorCode implements ErrorCode {
+    CONFIG_INVALID_EXCEPTION("TxtFileWriter-00", "您的参数配置错误."),
+    REQUIRED_VALUE("TxtFileWriter-01", "您缺失了必须填写的参数值."),
+    ILLEGAL_VALUE("TxtFileWriter-02", "您填写的参数值不合法."),
+    Write_FILE_ERROR("TxtFileWriter-03", "您配置的目标文件在写入时异常."),
+    Write_FILE_IO_ERROR("TxtFileWriter-04", "您配置的文件在写入时出现IO异常."),
+    SECURITY_NOT_ENOUGH("TxtFileWriter-05", "您缺少权限执行相应的文件写入操作."),
 
 	INSTALL_ERROR("Framework-00", "DataX引擎安装错误, 请联系您的运维解决 ."),
 	ARGUMENT_ERROR("Framework-01", "DataX引擎运行错误，该问题通常是由于内部编程错误引起，请联系DataX开发团队解决 ."),
@@ -28,6 +34,8 @@ public enum FrameworkErrorCode implements ErrorCode {
     CALL_DATAX_SERVICE_FAILED("Framework-18", "请求 DataX Service 出错."),
     CALL_REMOTE_FAILED("Framework-19", "远程调用失败"),
     KILLED_EXIT_VALUE("Framework-143", "Job 收到了 Kill 命令.");
+
+
 
     private final String code;
 

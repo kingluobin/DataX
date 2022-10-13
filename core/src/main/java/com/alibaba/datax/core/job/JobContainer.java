@@ -28,11 +28,15 @@ import com.alibaba.datax.core.util.container.CoreConstant;
 import com.alibaba.datax.core.util.container.LoadUtil;
 import com.alibaba.datax.dataxservice.face.domain.enums.ExecuteMode;
 import com.alibaba.fastjson.JSON;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.PrefixFileFilter;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.Validate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.*;
+import java.nio.channels.FileChannel;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,7 +47,8 @@ import java.util.List;
  * job实例运行在jobContainer容器中，它是所有任务的master，负责初始化、拆分、调度、运行、回收、监控和汇报
  * 但它并不做实际的数据同步操作
  */
-public class JobContainer extends AbstractContainer {
+public class JobContainer extends AbstractContainer
+{
     private static final Logger LOG = LoggerFactory
             .getLogger(JobContainer.class);
 
@@ -176,6 +181,10 @@ public class JobContainer extends AbstractContainer {
 
                     LOG.info(PerfTrace.getInstance().summarizeNoException());
                     this.logStatistics();
+
+                    String jxmb = userConf.getString("job.content[0].writer.parameter.jxmoban");
+                    if(jxmb != null && (jxmb.equals("Y") || jxmb.equals("y")))
+                        mergeFiles(userConf.getString("job.content[0].writer.parameter.path"), userConf.getString("job.content[0].writer.parameter.fileName"));
                 }
             }
         }
@@ -972,5 +981,89 @@ public class JobContainer extends AbstractContainer {
         Communication comm = super.getContainerCommunicator().collect();
         HookInvoker invoker = new HookInvoker(CoreConstant.DATAX_HOME + "/hook", configuration, comm.getCounter());
         invoker.invokeAll();
+    }
+
+    /**
+    *合并文件
+     * */
+    public  void mergeFiles(String path, String fileName) {
+
+        LOG.info(String.format(
+                "开始合并文件, 把目录下 [%s] 下面以 [%s] 开头的文件合并成一个",
+                path, fileName));
+        String resultPath=path+File.separator+fileName+".txt.gz";
+        File dir = new File(path);
+        File resultFile = new File(resultPath);
+        // warn:需要判断文件是否存在，不存在时，不能删除
+        FileChannel resultFileChannel = null ;
+        try {
+            if (dir.exists()) {
+                // warn:不要使用FileUtils.deleteQuietly(dir);
+                FilenameFilter filter = new PrefixFileFilter(fileName+"__");
+                File[] filesWithFileNamePrefix = dir.listFiles(filter);
+                if(filesWithFileNamePrefix.length == 1){
+                    filesWithFileNamePrefix[0].renameTo(resultFile);
+                }
+                else{
+                    resultFileChannel = new FileOutputStream(resultFile, true).getChannel();
+                    for (File eachFile : filesWithFileNamePrefix) {
+                        FileChannel blk = new FileInputStream(eachFile).getChannel();
+                        resultFileChannel.transferFrom(blk, resultFileChannel.size(), blk.size());
+                        blk.close();
+                        LOG.info(String.format("merge and delete file [%s].", eachFile.getName()));
+                        FileUtils.forceDelete(eachFile);
+                    }
+                }
+                // FileUtils.cleanDirectory(dir);
+            }
+        } catch (NullPointerException npe) {
+            throw DataXException
+                    .asDataXException(
+                            FrameworkErrorCode.Write_FILE_ERROR,
+                            String.format("您配置的目录清空时出现空指针异常 : [%s]",
+                                    path), npe);
+        } catch (IllegalArgumentException iae) {
+            throw DataXException.asDataXException(
+                    FrameworkErrorCode.SECURITY_NOT_ENOUGH,
+                    String.format("您配置的目录参数异常 : [%s]", path));
+        } catch (SecurityException se) {
+            throw DataXException.asDataXException(
+                    FrameworkErrorCode.SECURITY_NOT_ENOUGH,
+                    String.format("您没有权限查看目录 : [%s]", path));
+        } catch (IOException e) {
+            throw DataXException.asDataXException(
+                    FrameworkErrorCode.Write_FILE_ERROR,
+                    String.format("无法清空目录 : [%s]", path), e);
+        }finally {
+            if(resultFileChannel != null) {
+                try {
+                    resultFileChannel.close();
+                } catch (IOException e) {
+                    throw DataXException.asDataXException(
+                            FrameworkErrorCode.Write_FILE_ERROR,
+                            String.format("关闭合并文件失败 : [%s]", path), e);
+                }
+            }
+        }
+
+        Communication communication = super.getContainerCommunicator().collect();
+        String countPath=path+File.separator+fileName+".num";
+        userConf.getString(CoreConstant.DATAX_CONF_PATH);
+        FileWriter fileWriter = null;
+        try {
+            fileWriter = new FileWriter(countPath);
+            fileWriter.write(CommunicationTool.getTotalReadRecords(communication)+"");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if(fileWriter != null ) {
+                try {
+                    fileWriter.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 }
